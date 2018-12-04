@@ -14,7 +14,8 @@
 				"--input",
 				"./test-files-small",
 				"--out",
-				"./out"
+				"./out",
+				"--sharpness"
 			]
 		},
 		{
