@@ -12,7 +12,7 @@
 			"program": "${file}",
 			"args":[
 				"--input",
-				"./test-files-small",
+				"./test-images",
 				"--out",
 				"./out",
 				"--sharpness"

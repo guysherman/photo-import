@@ -19,6 +19,8 @@ import image_sharpness
 CAMERA_TAG = "Image Model"
 DATE_TAG = "Image DateTime"
 
+lastIndex = 1
+
 #RELEVANT_TAGS = ['Image DateTime', 'Image Model'],
 
 
@@ -33,25 +35,28 @@ def main(args):
     
     if args.sharpness == True:
         print("Sorting sharp from unsharp...")
-        sharp, unsharp = sortSharpFromUnsharp(files)
-        print("Grouping files based on EXIF data (slow)...")
-        groupedFilesSharp = splitFilesIntoDaysAndCameras(sharp, True)
-        groupedFilesUnSharp = splitFilesIntoDaysAndCameras(unsharp, False)
-        print("Splitting file groups into volumes...")
-        volumesSharp = splitGroupsIntoVolumes(groupedFilesSharp)
-        volumesUnSharp = splitGroupsIntoVolumes(groupedFilesUnSharp)
-        print("Copying files over...")
-        copyFilesToVolumePaths(args.out[0], volumesSharp)
-        copyFilesToVolumePaths(args.out[0], volumesUnSharp)
+        sharp, questionable, unsharp = sortSharpFromUnsharp(files)
+        print("Processing sharp files...")
+        processGroupOfPhotos(sharp, "sharp", args.out[0])
+        print("Processing questionable files...")
+        processGroupOfPhotos(questionable, "questionable", args.out[0])
+        print("Processing unsharp files...")
+        processGroupOfPhotos(unsharp, "unsharp", args.out[0])
     else:
-        print("Grouping files based on EXIF data (slow)...")
-        groupedFiles = splitFilesIntoDaysAndCameras(files, True)
-        print("Splitting file groups into volumes...")
-        volumes = splitGroupsIntoVolumes(groupedFiles)
-        print("Copying files over...")
-        copyFilesToVolumePaths(args.out[0], volumes)
+        processGroupOfPhotos(files, "sharp", args.out[0])
 
     return 0
+
+def processGroupOfPhotos(photos, prefix, out):
+    """
+    Does the full work on a group of photos
+    """
+    print("Grouping files based on EXIF data (slow)...")
+    groupedFiles = splitFilesIntoDaysAndCameras(photos, prefix)
+    print("Splitting file groups into volumes...")
+    volumes = splitGroupsIntoVolumes(groupedFiles)
+    print("Copying files over...")
+    copyFilesToVolumePaths(out, volumes)
 
 
 def sortSharpFromUnsharp(files):
@@ -63,15 +68,18 @@ def sortSharpFromUnsharp(files):
     """
     sharp = []
     unsharp = []
+    questionable = []
 
     for file in files:
         isSharp = testImageSharpness(file)
-        if isSharp:
+        if isSharp == "sharp":
             sharp.append(file)
+        elif isSharp == "questionable":
+            questionable.append(file)
         else:
             unsharp.append(file)
     
-    return sharp, unsharp
+    return sharp, questionable, unsharp
 
 
 def testImageSharpness(file):
@@ -81,15 +89,19 @@ def testImageSharpness(file):
     file:- an image to test for sharpness
     returns:- true if the image is sharp, otherwise false
     """
+    global lastIndex
     photo = image_sharpness.Image.fromFile(file)
-    wholeImageSharpness = photo.getWholeImageSharpness()
-    sharpness = photo.getSharpnessForPrimaryAfPoint()
-    if sharpness >= 1.0:
-        print (file, "- sharp", sharpness, "/", wholeImageSharpness, " = ", sharpness/wholeImageSharpness)
-        return True
-    else:
+    wholeImageSharpness = photo.getWholeImageGradientSharpness()
+    sharpness = photo.getGradientSharpnessForPrimaryAfPoint(lastIndex)
+    if sharpness < 0.5:
         print (file, "- unsharp", sharpness, "/", wholeImageSharpness, " = ", sharpness/wholeImageSharpness)
-        return False
+        return "unsharp"
+    elif sharpness >= 0.5 and sharpness < 1.7:
+        print (file, "- questionable", sharpness, "/", wholeImageSharpness, " = ", sharpness/wholeImageSharpness)
+        return "questionable"
+    else:
+        print (file, "- sharp", sharpness, "/", wholeImageSharpness, " = ", sharpness/wholeImageSharpness)
+        return "sharp"
 
 
 
@@ -108,7 +120,7 @@ def getAllNefFiles(inputLocations):
 
 
 
-def splitFilesIntoDaysAndCameras(nefFiles, isSharp):
+def splitFilesIntoDaysAndCameras(nefFiles, prefix):
     """
     Takes the list of files, and creates a dictionary where they keys are
     the base paths (ie Year/Month/Day/Camera).
@@ -119,7 +131,7 @@ def splitFilesIntoDaysAndCameras(nefFiles, isSharp):
     groupedImages = {}
     for path in nefFiles:
         tags = getTagsFromFile(path)
-        basePath = getBasePathFromTags(tags, isSharp)
+        basePath = getBasePathFromTags(tags, prefix)
         if basePath not in groupedImages:
             groupedImages[basePath] = []
         groupedImages[basePath].append(path)
@@ -138,7 +150,7 @@ def getTagsFromFile(nefFilePath):
         tags = exifread.process_file(nefFile)
     return tags
 
-def getBasePathFromTags(tags, isSharp):
+def getBasePathFromTags(tags, prefix):
     """
     Uses the 'Image DateTime' and 'Image Model' tags to build a base path
     under which to store images.
@@ -152,9 +164,8 @@ def getBasePathFromTags(tags, isSharp):
     year = dateMatches.group(1)
     month = dateMatches.group(2)
     day = dateMatches.group(3)
-    sharp = 'sharp' if isSharp else 'unsharp' 
 
-    basePath = os.path.join(sharp, year, month, day, camera)
+    basePath = os.path.join(prefix, year, month, day, camera)
     return basePath
 
 def splitGroupsIntoVolumes(groupedFiles):

@@ -74,14 +74,26 @@ class Image:
         tags = getTagsFromFile(filename)
         self.AFInfo2 = tags[AFINFO2_TAG]
 
-    def getPrimaryAfPointTile(self, layer):
+    def getPrimaryAfPointIndex(self, lastIndex):
+        """
+        Returns the index of the primary af point, or the passed-in index if there is no primary
+
+        lastIndex:- the previous index retrieved. This allows the caller to reuse the last focus point
+        """
+        index = self.AFInfo2.values[7]
+        if index == 0:
+            index = lastIndex
+        return index
+    
+    
+    def getPrimaryAfPointTile(self, layer, lastIndex):
         """
         Returns the tile form the primary af point for the image
 
         layer:- as string with one of 'rgb', 'l' or 'grad', selects which layer the tile comes from
         returns:- a numpy array with the requested tile
         """
-        return self.getAfPointTile(self.AFInfo2.values[7], layer)
+        return self.getAfPointTile(self.getPrimaryAfPointIndex(lastIndex), layer)
     
     def getAfPointTile(self, afPointIndex, layer):
         """
@@ -116,17 +128,45 @@ class Image:
         else:
             return np.asarry([[0]], dtype=np.int32)
     
-    def getWholeImageSharpness(self):
+    def getWholeImageGradientSharpness(self):
         """
         Average the entire image gradient to give overall 'sharpness'
         """
         return np.average(self.lumoGradient)
 
-    def getSharpnessForPrimaryAfPoint(self):
+    def getGradientSharpnessForPrimaryAfPoint(self, lastIndex):
         """
         Average the primary af point tile gradient to give 'sharpness' of the tile
         """
-        return np.average(self.getPrimaryAfPointTile('grad'))
+        return np.average(self.getPrimaryAfPointTile('grad', lastIndex))
+
+    def getWholeImageVarianceSharpness(self):
+        """
+        Get variance measure for whole image
+        """
+        return self.getVarianceSharpnessForImage(self.lumoImage)
+    
+    
+    def getVarianceSharpnessForImage(self, image):
+        """
+        Uses the variance method (http://www.csl.cornell.edu/~cbatten/pdfs/batten-image-processing-sem-slides-scanning2001.pdf)
+        to calculate image sharpness
+        """
+        normImage = image / 255
+        meanIntensity = np.average(normImage)
+        diff = normImage - meanIntensity
+        diffSq = diff**2
+        sharpnessVector = np.add.reduce(diffSq)
+        sharpness = np.add.reduce(sharpnessVector) / normImage.size
+        return sharpness
+
+    def getVarianceSharpnessForPrimaryAfPoint(self, lastIndex):
+        """
+        Get variance sharpness for primary af point image
+        """
+        afImage = self.getPrimaryAfPointTile('l', lastIndex)
+        return self.getVarianceSharpnessForImage(afImage)
+
 
 
 
