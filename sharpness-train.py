@@ -29,8 +29,15 @@ def main(args):
         
     top = tkinter.Tk()
     
-    top.bind('x', imageSharp)
-    top.bind('z', imageUnsharp)
+    #top.bind('x', imageSharp)
+    #top.bind('z', imageUnsharp)
+    top.bind('`', lambda x: rateImage(0))
+    top.bind('0', lambda x: rateImage(0))
+    top.bind('1', lambda x: rateImage(1))
+    top.bind('2', lambda x: rateImage(2))
+    top.bind('3', lambda x: rateImage(3))
+    top.bind('4', lambda x: rateImage(4))
+    top.bind('5', lambda x: rateImage(5))
 
     label = tkinter.Label()
     label.pack()
@@ -39,6 +46,14 @@ def main(args):
 
     top.mainloop()
     return
+
+
+def rateImage(rating):
+    global currentRecord, results
+    currentRecord.append(rating)
+    results.append(currentRecord)
+    writeCsv()
+    nextImage()
 
 
 def imageSharp(event):
