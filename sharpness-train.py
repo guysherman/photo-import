@@ -16,7 +16,7 @@ files = None
 nefImage = None
 lastIndex = 1
 currentRecord = []
-results = [["filename", "wv", "pv", "wg", "pg", "s"]]
+results = [["filename", "wv", "pv", "wg", "pg", "f", "d", "a0", "a1", "a2", "a3", "s"]]
 
 
 def main(args):
@@ -80,17 +80,22 @@ def imageUnsharp(event):
 
 def nextImage():
     global files, filesIterator, photoImage, label, lastIndex, currentRecord
+    label.pack_forget()
     nefImagePath = next(filesIterator)
-    isImage = image_sharpness.Image.fromFile(nefImagePath)
+    isImage = image_sharpness.Image(nefImagePath)
     wiVarSharpness = isImage.getWholeImageVarianceSharpness()
     afVarSharpness = isImage.getVarianceSharpnessForPrimaryAfPoint(lastIndex)
     wiGradSharpness = isImage.getWholeImageGradientSharpness()
     afGradSharpness = isImage.getGradientSharpnessForPrimaryAfPoint(lastIndex)
-    currentRecord = [nefImagePath, wiVarSharpness, afVarSharpness, wiGradSharpness, afGradSharpness]
+    focalLength = isImage.getFocalLength()
+    focalDistance = isImage.getFocalDistance()
+    avg0, avg1, avg2, avg3 = isImage.getFourierValues(lastIndex)
+    currentRecord = [nefImagePath, wiVarSharpness, afVarSharpness, wiGradSharpness, afGradSharpness, focalLength, focalDistance, avg0, avg1, avg2, avg3]
     tileImage = pilImage.fromarray(isImage.getPrimaryAfPointTile('rgb', lastIndex))
     lastIndex = isImage.getPrimaryAfPointIndex(lastIndex)
     photoImage = tkImage.PhotoImage(tileImage)
     label.config(image = photoImage)
+    label.pack()
 
 
 

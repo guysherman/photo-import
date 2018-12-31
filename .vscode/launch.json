@@ -15,7 +15,9 @@
 				"./test",
 				"--out",
 				"./out",
-				"--sharpness"
+				"--sharpness",
+				"--model",
+				"model.json"
 			]
 		},
 		{

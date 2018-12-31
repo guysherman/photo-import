@@ -8,6 +8,7 @@ browser implementation on iOS.
 import os
 import shutil
 import re
+import json
 
 import exifread
 import numpy as np
@@ -15,6 +16,7 @@ import numpy as np
 
 import python_batch_processing
 import image_sharpness
+import generic_predictor
 
 CAMERA_TAG = "Image Model"
 DATE_TAG = "Image DateTime"
@@ -34,8 +36,20 @@ def main(args):
     files = getAllNefFiles(args.input)
     
     if args.sharpness == True:
+        modelPath = 'model.json'
+        if args.model != None:
+            modelPath = args.model[0]
+        
+
+        predictor = None
+        with open(modelPath, 'r') as modelFile:
+            s = modelFile.read()
+            modelObj = json.loads(s)
+            predictor = generic_predictor.RuntimePredictor(modelObj['featureNames'], modelObj['coefficients'], modelObj['intercept'])
+
+
         print("Sorting sharp from unsharp...")
-        sharp, questionable, unsharp = sortSharpFromUnsharp(files)
+        sharp, questionable, unsharp = sortSharpFromUnsharp(files, predictor)
         print("Processing sharp files...")
         processGroupOfPhotos(sharp, "sharp", args.out[0])
         print("Processing questionable files...")
@@ -59,7 +73,7 @@ def processGroupOfPhotos(photos, prefix, out):
     copyFilesToVolumePaths(out, volumes)
 
 
-def sortSharpFromUnsharp(files):
+def sortSharpFromUnsharp(files, predictor):
     """
     Sorts sharp images from unsharp images
 
@@ -70,8 +84,11 @@ def sortSharpFromUnsharp(files):
     unsharp = []
     questionable = []
 
+    if predictor == None:
+        print("Warning using crappy model because no model supplied")
+
     for file in files:
-        isSharp = testImageSharpness(file)
+        isSharp = testImageSharpness(file, predictor)
         if isSharp == "sharp":
             sharp.append(file)
         elif isSharp == "questionable":
@@ -82,7 +99,7 @@ def sortSharpFromUnsharp(files):
     return sharp, questionable, unsharp
 
 
-def testImageSharpness(file):
+def testImageSharpness(file, predictor):
     """
     Tests and image to see if it is sharp
 
@@ -90,17 +107,37 @@ def testImageSharpness(file):
     returns:- true if the image is sharp, otherwise false
     """
     global lastIndex
-    photo = image_sharpness.Image.fromFile(file)
-    wholeImageSharpness = photo.getWholeImageGradientSharpness()
-    sharpness = photo.getGradientSharpnessForPrimaryAfPoint(lastIndex)
-    if sharpness < 0.5:
-        print (file, "- unsharp", sharpness, "/", wholeImageSharpness, " = ", sharpness/wholeImageSharpness)
+    photo = image_sharpness.Image(file)
+    wiVarSharpness = photo.getWholeImageVarianceSharpness()
+    afVarSharpness = photo.getVarianceSharpnessForPrimaryAfPoint(lastIndex)
+    wiGradSharpness = photo.getWholeImageGradientSharpness()
+    afGradSharpness = photo.getGradientSharpnessForPrimaryAfPoint(lastIndex)
+    focalLength = photo.getFocalLength().values[0]
+    focalDistance = photo.getFocalDistance()
+    avg0, avg1, avg2, avg3 = photo.getFourierValues(lastIndex)
+
+    sharpness = 0
+    if predictor == None:
+        coefWv = -3.88599991e+00
+        coefAg = 2.86841821e-01
+        coefF = -4.75593447e-03
+        coefA0 = 9.47094800e-05
+        coefA1 = -8.92048122e-04
+        coefA3 = -7.00857457e-04
+        C = 3.3100968292972452
+        sharpness = coefWv * wiVarSharpness + coefAg * afGradSharpness + coefF * focalLength + coefA0 * avg0 + coefA1 * avg1 + coefA3 * avg3 + C
+    else:
+        dataPoint = [1, wiVarSharpness, afVarSharpness, wiGradSharpness, afGradSharpness, focalLength, focalDistance, avg0, avg1, avg2, avg3]
+        sharpness = predictor.predict(dataPoint)
+
+    if sharpness < 2.5:
+        print (file, "- unsharp", sharpness)
         return "unsharp"
-    elif sharpness >= 0.5 and sharpness < 1.7:
-        print (file, "- questionable", sharpness, "/", wholeImageSharpness, " = ", sharpness/wholeImageSharpness)
+    elif sharpness >= 2.5 and sharpness < 3.0:
+        print (file, "- questionable", sharpness)
         return "questionable"
     else:
-        print (file, "- sharp", sharpness, "/", wholeImageSharpness, " = ", sharpness/wholeImageSharpness)
+        print (file, "- sharp", sharpness)
         return "sharp"
 
 
@@ -222,5 +259,6 @@ if __name__ == "__main__":
     parser = python_batch_processing.StandardisedArguments.create_basic_parser(
         "Import digital photos from a memory card into a nice structure")
     parser = image_sharpness.StandardisedArguments.add_sharpness_arguments(parser)
+    parser = generic_predictor.StandardisedArguments.add_arguments(parser)
     arguments = parser.parse_args()
     main(arguments)
