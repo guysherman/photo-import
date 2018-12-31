@@ -8,6 +8,7 @@ import numpy as np
 import rawpy
 from PIL import Image as pilImage
 import imageio
+from . import NefDecrypt
 
 AfPointLookup = [[0,0],
 [3015,2014],
@@ -51,6 +52,10 @@ AfPointLookup = [[0,0],
 [1845,2354]]
 
 AFINFO2_TAG = "MakerNote AFInfo2"
+FOCALLENGTH_TAG = "EXIF FocalLengthIn35mmFilm"
+SHUTTERCOUNT_TAG = "MakerNote TotalShutterReleases"
+SERIAL_TAG = "MakerNote SerialNumber"
+LENSDATA_TAG =  "MakerNote LensData"
 
 class Image:
     """
@@ -73,6 +78,14 @@ class Image:
 
         tags = getTagsFromFile(filename)
         self.AFInfo2 = tags[AFINFO2_TAG]
+        self.FocalLength = tags[FOCALLENGTH_TAG]
+        self.SerialNumber = tags[SERIAL_TAG]
+        self.ShutterCount = tags[SHUTTERCOUNT_TAG]
+
+        lensDataCipher = tags[LENSDATA_TAG].values[4:]
+        lensDataClear = NefDecrypt.Decrypt(lensDataCipher, int(self.SerialNumber.values), int(self.ShutterCount.values[0]))
+        lensDataFocalDistance = lensDataClear[6]
+        self.FocalDistance = (0.01 * pow(10, lensDataFocalDistance / 40))
 
     def getPrimaryAfPointIndex(self, lastIndex):
         """
@@ -166,6 +179,41 @@ class Image:
         """
         afImage = self.getPrimaryAfPointTile('l', lastIndex)
         return self.getVarianceSharpnessForImage(afImage)
+
+    def getFocalLength(self):
+        """
+        Gets the focal length for the photo
+        """
+        return self.FocalLength
+
+    def getFocalDistance(self):
+        """
+        Gets the focus distance of the image.
+        """
+        return self.FocalDistance
+
+    def getFourierValues(self, lastIndex):
+        """
+        Uses a 2D fourier transofrm to give average values in four frequency bands
+        """
+        tileArray = self.getPrimaryAfPointTile('l', lastIndex)
+        fftArray = np.fft.fft2(tileArray, [512,512])
+    
+        r2 = fftArray.real ** 2
+        i2 = fftArray.imag ** 2
+        a = np.sqrt(np.add(r2, i2))[0:256, 0:256]
+        a0 = a[0:128, 0:128]
+        a1 = a[128:256, 0:128]
+        a2 = a[0:128, 128:256]
+        a3 = a[128:256, 128:256]
+
+        avg0 = np.average(a0)
+        avg1 = np.average(a1)
+        avg2 = np.average(a2)
+        avg3 = np.average(a3)
+
+        return avg0, avg1, avg2, avg3
+
 
 
 
