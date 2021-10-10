@@ -108,3 +108,8 @@ test-files-small/
 out/
 
 node_modules/
+
+*.key
+*.jpg
+*.csv
+test-images/

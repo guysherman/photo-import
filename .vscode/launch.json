@@ -12,12 +12,9 @@
 			"program": "${file}",
 			"args":[
 				"--input",
-				"./test",
+				"/media/guy/NIKON D6101",
 				"--out",
-				"./out",
-				"--sharpness",
-				"--model",
-				"model.json"
+				"/home/guy/Pictures/Albums/NEF",
 			]
 		},
 		{
@@ -106,7 +103,7 @@
 			"name": "Python: All debug Options",
 			"type": "python",
 			"request": "launch",
-			"pythonPath": "${config:python.pythonPath}",
+			"python": "${command:python.interpreterPath}",
 			"program": "${file}",
 			"module": "module.name",
 			"env": {

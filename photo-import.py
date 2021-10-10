@@ -251,8 +251,12 @@ def copyFilesToVolumePaths(outDir, volumes):
             for photo in volume:
                 photoBaseName = os.path.basename(photo)
                 photoOutPath = os.path.join(volumePath, photoBaseName)
-                print("\tCopy", photo, "to", photoOutPath)
-                shutil.copyfile(photo, photoOutPath)
+                if not os.path.exists(photoOutPath):
+                    print("\tCopy", photo, "to", photoOutPath)
+                    shutil.copyfile(photo, photoOutPath)
+                else:
+                    print("\tIgnoring", photo, "because there is already a file at", photoOutPath)
+
             volumeIndex += 1
 
 if __name__ == "__main__":
