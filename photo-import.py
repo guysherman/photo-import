@@ -222,7 +222,7 @@ def splitGroupsIntoVolumes(groupedFiles):
             volumes[group].append(groupedFiles[group])
         else:
             numVolumes = int((numFilesInGroup / 250)) + 1
-            for volumeIndex in range(1, numVolumes):
+            for volumeIndex in range(1, numVolumes + 1):
                 startIndex = (volumeIndex - 1) * 250
                 endIndex = startIndex + 250
                 if volumeIndex == 1:
